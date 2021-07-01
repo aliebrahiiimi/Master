@@ -11,7 +11,7 @@ def set_args():
                         default="Evaluation",
                         type=str)
     parser.add_argument("--data_dir",
-                        default="/content/drive/MyDrive/Develop/DFGN/train_select",
+                        default="",
                         type=str,
                         help="The input data dir. Should contain the .tsv files (or other data files) for the task.")
     parser.add_argument("--bert_model", default='bert-base-cased', type=str,
@@ -26,7 +26,7 @@ def set_args():
                         type=str,
                         help="The output directory where the model checkpoints will be written.")
     parser.add_argument("--max_seq_length",
-                        default=256,
+                        default=128,
                         type=int,
                         help="The maximum total input sequence length after WordPiece tokenization. \n"
                              "Sequences longer than this will be truncated, and sequences shorter \n"
@@ -44,11 +44,11 @@ def set_args():
                         action='store_true',
                         help="Set this flag if you are using an uncased model.")
     parser.add_argument("--train_batch_size",
-                        default=32,
+                        default=64,
                         type=int,
                         help="Total batch size for training.")
     parser.add_argument("--eval_batch_size",
-                        default=32,
+                        default=64,
                         type=int,
                         help="Total batch size for eval.")
     parser.add_argument("--learning_rate",
