@@ -34,23 +34,23 @@ class InputExample(object):
 
 class InputFeatures(object):
 
-    def __init__(self, input_ids, input_mask, segment_ids, label_id):
+    def __init__(self, input_ids, input_mask, label_id):
         self.input_ids = input_ids
         self.input_mask = input_mask
-        self.segment_ids = segment_ids
+        # self.segment_ids = segment_ids
         self.label_id = label_id
 
 
 class DataProcessor(object):
 
     def get_train_examples(self, data_dir):
-        logger.info("LOOKING AT {}".format(os.path.join(data_dir, "hotpot_ss_train.csv")))
-        train_path = os.path.join(data_dir, "hotpot_ss_train.csv")
+        logger.info("LOOKING AT {}".format(os.path.join(data_dir, "hotpot_train.csv")))
+        train_path = os.path.join(data_dir, "hotpot_train.csv")
         return self._create_examples(
             pandas.read_csv(train_path), set_type='train')
 
     def get_dev_examples(self, data_dir):
-        dev_path = os.path.join(data_dir, "hotpot_ss_dev.csv")
+        dev_path = os.path.join(data_dir, "hotpot_dev.csv")
         return self._create_examples(
             pandas.read_csv(dev_path), set_type='dev')
 
@@ -59,7 +59,9 @@ class DataProcessor(object):
 
     def _create_examples(self, df, set_type):
         examples = []
+    
         for (i, row) in df.iterrows():
+
             guid = "%s-%s" % (set_type, i)
             text_a = row['question']
             text_b = '{} {}'.format(row['context'], row['title'])
@@ -76,26 +78,33 @@ def convert_examples_to_features(examples, label_list, max_seq_length, tokenizer
     features = []
 
     for (ex_index, example) in enumerate(tqdm(examples)):
-        tokens_a = tokenizer.tokenize(example.text_a)
-        tokens_b = tokenizer.tokenize(example.text_b)
-        _truncate_seq_pair(tokens_a, tokens_b, max_seq_length - 3)
+        # tokens_a = tokenizer.tokenize(example.text_a)
+        # tokens_b = tokenizer.tokenize(example.text_b)
+        # _truncate_seq_pair(tokens_a, tokens_b, max_seq_length - 3)
 
-        # Feature ids
-        tokens = ["[CLS]"] + tokens_a + ["[SEP]"] + tokens_b + ["[SEP]"]
-        segment_ids = [0] * (len(tokens_a ) + 2) + [1] * (len(tokens_b) + 1)
-        input_ids = tokenizer.convert_tokens_to_ids(tokens)
+        # # Feature ids
+        # tokens = ['<s>'] + tokens_a + ['</s></s>'] + tokens_b + ['</s>']
+        # segment_ids = [1] * (len(tokens_a ) + 2) + [0] * (len(tokens_b) + 2)
+        # input_ids = tokenizer.convert_tokens_to_ids(tokens)
+    
 
-        # Mask and Paddings
-        input_mask = [1] * len(input_ids)
-        padding = [0] * (max_seq_length - len(input_ids))
+        # # Mask and Paddings
+        # input_mask = [1] * len(input_ids)
 
-        input_ids += padding
-        input_mask += padding
-        segment_ids += padding
+        # padding = [0] * (max_seq_length - len(input_ids))
 
+        # input_ids += padding
+        # input_mask += padding
+        # segment_ids += padding
+        texts = tokenizer(example.text_a,example.text_b,max_length=max_seq_length,padding='max_length',truncation=True)
+        tokens = tokenizer.decode(texts["input_ids"])
+        input_ids = texts['input_ids']
+        input_mask = texts['attention_mask']
+        # segment_ids = texts['token_type_ids']
+        # print(len(input_ids))
         assert len(input_ids) == max_seq_length
         assert len(input_mask) == max_seq_length
-        assert len(segment_ids) == max_seq_length
+        # assert len(segment_ids) == max_seq_length
 
         label_id = label_map[example.label]
         if ex_index < 5 and verbose:
@@ -105,14 +114,14 @@ def convert_examples_to_features(examples, label_list, max_seq_length, tokenizer
                     [str(x) for x in tokens]))
             logger.info("input_ids: %s" % " ".join([str(x) for x in input_ids]))
             logger.info("input_mask: %s" % " ".join([str(x) for x in input_mask]))
-            logger.info(
-                    "segment_ids: %s" % " ".join([str(x) for x in segment_ids]))
+            # logger.info(
+            #         "segment_ids: %s" % " ".join([str(x) for x in segment_ids]))
             logger.info("label: %s (id = %d)" % (example.label, label_id))
 
         features.append(
                 InputFeatures(input_ids=input_ids,
                               input_mask=input_mask,
-                              segment_ids=segment_ids,
+                              # segment_ids=segment_ids,
                               label_id=label_id))
     return features
 
@@ -152,9 +161,9 @@ def evaluate(do_pred=False, pred_path=None):
     logger.info("  Batch size = %d", args.eval_batch_size)
     eval_input_ids = torch.tensor([f.input_ids for f in eval_features], dtype=torch.long)
     eval_input_mask = torch.tensor([f.input_mask for f in eval_features], dtype=torch.long)
-    eval_segment_ids = torch.tensor([f.segment_ids for f in eval_features], dtype=torch.long)
+    # eval_segment_ids = torch.tensor([f.segment_ids for f in eval_features], dtype=torch.long)
     eval_label_ids = torch.tensor([f.label_id for f in eval_features], dtype=torch.long)
-    eval_data = TensorDataset(eval_input_ids, eval_input_mask, eval_segment_ids, eval_label_ids)
+    eval_data = TensorDataset(eval_input_ids, eval_input_mask, eval_label_ids)
     # Run prediction for full data
     eval_sampler = SequentialSampler(eval_data)
     eval_dataloader = DataLoader(eval_data, sampler=eval_sampler, batch_size=args.eval_batch_size)
@@ -163,15 +172,15 @@ def evaluate(do_pred=False, pred_path=None):
     eval_loss, eval_accuracy = 0, 0
     nb_eval_steps, nb_eval_examples = 0, 0
     predictions = []
-    for input_ids, input_mask, segment_ids, label_ids in tqdm(eval_dataloader, desc="Evaluation"):
+    for input_ids, input_mask,  label_ids in tqdm(eval_dataloader, desc="Evaluation"):
         input_ids = input_ids.cuda()
         input_mask = input_mask.cuda()
-        segment_ids = segment_ids.cuda()
+        # segment_ids = segment_ids.cuda()
         label_ids = label_ids.cuda()
 
         with torch.no_grad():
-            tmp_eval_loss = model(input_ids, attention_mask=input_mask, token_type_ids=segment_ids, labels=label_ids).loss
-            logits = model(input_ids, attention_mask=input_mask, token_type_ids=segment_ids, labels=label_ids).logits
+            tmp_eval_loss = model(input_ids, attention_mask=input_mask,  labels=label_ids).loss
+            logits = model(input_ids, attention_mask=input_mask, labels=label_ids).logits
 
         logits = logits.detach().cpu().numpy()
         label_ids = label_ids.to('cpu').numpy()
@@ -250,14 +259,17 @@ if __name__ == "__main__":
     label_list = processor.get_labels()
 
     # Prepare Tokenizer
-    from transformers import ElectraTokenizer, ElectraForSequenceClassification
-    tokenizer = ElectraTokenizer.from_pretrained('google/electra-base-discriminator')
+    # from transformers import ElectraTokenizer, ElectraForSequenceClassification
+    # tokenizer = ElectraTokenizer.from_pretrained('google/electra-base-discriminator')
 
-    # Prepare Model
-    # model = BertForSequenceClassification.from_pretrained(args.bert_model, num_labels=num_labels)
+    # # Prepare Model
+    # # model = BertForSequenceClassification.from_pretrained(args.bert_model, num_labels=num_labels)
  
-    model = ElectraForSequenceClassification.from_pretrained('google/electra-base-discriminator',num_labels=num_labels)
-
+    # model = ElectraForSequenceClassification.from_pretrained('google/electra-base-discriminator',num_labels=num_labels)
+    
+    from transformers import RobertaTokenizer, RobertaForSequenceClassification
+    tokenizer = RobertaTokenizer.from_pretrained('roberta-large')
+    model = RobertaForSequenceClassification.from_pretrained('roberta-large')
     model.cuda()
     if n_gpu > 1:
         model = torch.nn.DataParallel(model)
@@ -297,26 +309,27 @@ if __name__ == "__main__":
         logger.info("  Num steps = %d", num_train_steps)
         all_input_ids = torch.tensor([f.input_ids for f in train_features], dtype=torch.long)
         all_input_mask = torch.tensor([f.input_mask for f in train_features], dtype=torch.long)
-        all_segment_ids = torch.tensor([f.segment_ids for f in train_features], dtype=torch.long)
+        # all_segment_ids = torch.tensor([f.segment_ids for f in train_features], dtype=torch.long)
         all_label_ids = torch.tensor([f.label_id for f in train_features], dtype=torch.long)
-        train_data = TensorDataset(all_input_ids, all_input_mask, all_segment_ids, all_label_ids)
+        train_data = TensorDataset(all_input_ids, all_input_mask, all_label_ids)
         train_sampler = RandomSampler(train_data)
         train_dataloader = DataLoader(train_data, sampler=train_sampler, batch_size=args.train_batch_size)
-
+        
         model.train()
         for epc in trange(int(args.num_train_epochs), desc="Epoch"):
             tr_loss = 0
             nb_tr_examples, nb_tr_steps = 0, 0
             for step, batch in enumerate(tqdm(train_dataloader, desc="Iteration")):
                 batch = tuple(t.cuda() for t in batch)
-                input_ids, input_mask, segment_ids, label_ids = batch
-                loss = model(input_ids, attention_mask=input_mask, token_type_ids=segment_ids, labels=label_ids).loss
+                input_ids, input_mask, label_ids = batch
+ 
+                loss = model(input_ids, attention_mask=input_mask, labels=label_ids).loss
                 if n_gpu > 1:
                     loss = loss.mean()  # mean() to average on multi-gpu.
                 if args.gradient_accumulation_steps > 1:
                     loss = loss / args.gradient_accumulation_steps
                 loss.backward()
-                print(loss.item())
+                # print(loss.item())
                 pandas.DataFrame({'train_loss':[float(loss.item())]}).to_csv('train_info.csv',mode='a',header =False)
                 tr_loss += loss.item()
                 nb_tr_examples += input_ids.size(0)
